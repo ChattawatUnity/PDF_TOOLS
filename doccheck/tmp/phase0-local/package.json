@@ -1,0 +1,11 @@
+{
+  "name": "doccheck-phase0-local",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ชั่วคราว — สคริปต์ทดสอบ Phase 0 ในเครื่องนักพัฒนา (ลบทั้งโฟลเดอร์ tmp/ หลังผ่าน Phase 0)",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "pdfkit": "0.17.2",
+    "playwright-core": "1.56.1"
+  }
+}

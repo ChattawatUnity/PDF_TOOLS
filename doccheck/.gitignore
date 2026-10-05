@@ -1,0 +1,8 @@
+# ข้อมูลลูกค้า — ห้าม commit (PDF ตัวอย่างและ expected.json ที่มีข้อมูลจริง)
+samples/
+
+node_modules/
+*.zip
+
+# ผลลัพธ์จากสคริปต์ชั่วคราว
+tmp/**/out/

@@ -1,0 +1,13 @@
+{
+  "name": "doccheck",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Doc Check — ดึงและเทียบข้อมูล Draft BL / BC จาก PDF (GAS webapp)",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "pdfjs-dist": "3.11.174"
+  }
+}

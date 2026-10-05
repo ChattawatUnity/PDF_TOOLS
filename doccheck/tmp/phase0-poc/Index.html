@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<!--
+  Doc Check — Phase 0 POC (หน้าเว็บ)
+  v0.1.0 · 2026-10-05
+
+  ไฟล์ชั่วคราว: ใช้วัดผล Phase 0 เท่านั้น — ต้องลบหลังผ่าน gate (ดู README "ไฟล์ชั่วคราวที่ต้องลบ")
+  วัดว่า pdf.js 3.11.174 จาก cdnjs ทำงานใน iframe ของ GAS ได้ด้วยวิธีไหน และใช้เวลาเท่าไร
+  ไฟล์ PDF ไม่ถูกส่งออกจากเบราว์เซอร์ และรายงานที่คัดลอกได้ไม่มีชื่อไฟล์หรือข้อความในเอกสาร
+-->
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<script>
+  const T_HEAD = performance.now();
+</script>
+<style>
+  :root {
+    --color-bg: #f6f8fa;
+    --color-surface: #ffffff;
+    --color-text: #1f2328;
+    --color-muted: #59636e;
+    --color-border: #d1d9e0;
+    --color-ok: #1a7f37;
+    --color-bad: #cf222e;
+    --color-accent: #0969da;
+    --color-accent-text: #ffffff;
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 24px;
+    --radius: 6px;
+    --font-ui: "Sarabun", "Noto Sans Thai", "Leelawadee UI", Tahoma, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+    --font-size: 14px;
+    --max-width: 1280px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font: var(--font-size)/1.5 var(--font-ui);
+  }
+  main {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: var(--space-5) var(--space-4);
+  }
+  h1 { font-size: 20px; margin: 0 0 var(--space-2); }
+  h2 { font-size: 16px; margin: 0 0 var(--space-3); }
+  h3 { font-size: 14px; margin: var(--space-4) 0 var(--space-2); }
+  section {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: var(--space-4);
+    margin-top: var(--space-4);
+  }
+  .muted { color: var(--color-muted); }
+  .ok { color: var(--color-ok); }
+  .bad { color: var(--color-bad); }
+  .row { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+  button {
+    font: inherit;
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--color-accent);
+    border-radius: var(--radius);
+    background: var(--color-accent);
+    color: var(--color-accent-text);
+    cursor: pointer;
+  }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  #status { margin-top: var(--space-3); }
+  pre {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: var(--space-3);
+    max-height: 420px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .table-wrap {
+    max-height: 360px;
+    overflow: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td {
+    padding: var(--space-1) var(--space-2);
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+    white-space: nowrap;
+  }
+  th { position: sticky; top: 0; background: var(--color-bg); }
+  td.num { text-align: right; font-family: var(--font-mono); }
+  td.str { white-space: pre; font-family: var(--font-mono); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Doc Check — ทดสอบ Phase 0</h1>
+  <p class="muted">หน้านี้วัดว่าอ่าน PDF ใน Google Apps Script ได้ด้วยวิธีไหน และเร็วแค่ไหน — ไฟล์ไม่ถูกส่งออกจากเครื่อง</p>
+
+  <section>
+    <h2>1. โหลดไลบรารี pdf.js</h2>
+    <div id="lib-status">กำลังโหลด…</div>
+  </section>
+
+  <section>
+    <h2>2. เลือกไฟล์ PDF แล้วกด "เริ่มทดสอบ"</h2>
+    <div class="row">
+      <input type="file" id="file" accept="application/pdf,.pdf">
+      <button id="run" disabled>เริ่มทดสอบ</button>
+    </div>
+    <div id="status" data-state="idle"></div>
+  </section>
+
+  <section id="result" hidden>
+    <h2>3. ผลการทดสอบ</h2>
+    <div class="row">
+      <button id="copy">คัดลอกรายงาน</button>
+      <span id="copy-status" class="muted"></span>
+    </div>
+    <pre id="report"></pre>
+    <h3>ตัวอย่าง text items (หน้า 1 สูงสุด 40 รายการ — แสดงบนจอเท่านั้น ไม่อยู่ในรายงาน)</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>หน้า</th><th>x</th><th>y</th><th>w</th><th>h</th><th>str</th></tr></thead>
+        <tbody id="items"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+'use strict';
+
+const POC_VERSION = '0.1.0';
+const PDFJS_VERSION = '3.11.174';
+const CDN_BASE = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/' + PDFJS_VERSION + '/';
+const LIB = {
+  url: CDN_BASE + 'pdf.min.js',
+  integrity: 'sha512-q+4liFwdPC/bNdhUpZx6aXDx/h77yEQtn4I1slHydcbZK34nLaR3cAeYSJshoxIOq3mjEf7xJE8YWIUHMn+oCQ=='
+};
+const WORKER = {
+  url: CDN_BASE + 'pdf.worker.min.js',
+  integrity: 'sha512-BbrZ76UNZq5BhH7LL7pn9A4TKQpQeNCHOo65/akfelcIBbcVvYWOFQKPXIrykE3qZxYjmDX573oa4Ywsc7rpTw=='
+};
+const STEP_TIMEOUT_MS = 30000;
+const PDF_HEADER_SCAN_BYTES = 1024;
+const PREVIEW_ITEM_LIMIT = 40;
+const PING_COUNT = 3;
+const WARNING_LIMIT = 20;
+const WARNING_MAX_CHARS = 160;
+const CLIPBOARD_PROBE_TEXT = 'doccheck-clipboard-probe';
+
+const state = {
+  lib: null,
+  workerFetch: null,
+  workerBlobUrl: null,
+  file: null,
+  warnings: new Set()
+};
+
+/* ---------- helpers ---------- */
+
+const $ = (id) => document.getElementById(id);
+const now = () => performance.now();
+const fmtMs = (v) => (v == null ? '-' : v.toFixed(1) + ' ms');
+const fmtKb = (bytes) => (bytes / 1024).toFixed(1) + ' KB';
+
+function withTimeout(promise, label) {
+  let timer;
+  const timeout = new Promise((resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('หมดเวลา ' + STEP_TIMEOUT_MS + ' ms: ' + label)), STEP_TIMEOUT_MS);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function errorInfo(err) {
+  return {
+    name: (err && err.name) || 'Error',
+    code: err && err.code != null ? err.code : null,
+    message: (err && err.message) || String(err)
+  };
+}
+
+function formatError(e) {
+  return e.name + (e.code != null ? ' (code ' + e.code + ')' : '') + ': ' + e.message;
+}
+
+function setStatus(text, stateName) {
+  const box = $('status');
+  box.textContent = text;
+  box.dataset.state = stateName;
+  box.className = stateName === 'error' ? 'bad' : '';
+}
+
+function loadScript(src, integrity) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = src;
+    if (integrity) {
+      script.integrity = integrity;
+      script.crossOrigin = 'anonymous';
+    }
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('โหลด script ไม่ได้: ' + src));
+    document.head.appendChild(script);
+  });
+}
+
+function resourceCacheState(url) {
+  const entry = performance.getEntriesByName(url)[0];
+  if (!entry) return { network: null, cache: 'ไม่ทราบ' };
+  let cache = 'ไม่ทราบ';
+  if (entry.encodedBodySize > 0) cache = entry.transferSize === 0 ? 'ใช่' : 'ไม่ใช่';
+  return { network: entry.duration, cache };
+}
+
+/* โหลดจาก cdnjs ไม่ได้: แยกว่าดาวน์โหลดไม่ได้ หรือดาวน์โหลดได้แต่ integrity ไม่ตรง */
+async function diagnoseScriptFailure(url) {
+  try {
+    const res = await fetch(url, { mode: 'cors', credentials: 'omit' });
+    return res.ok
+      ? 'ดาวน์โหลดได้ (HTTP ' + res.status + ') แต่ถูกปฏิเสธ — น่าจะเป็น integrity ไม่ตรง'
+      : 'ดาวน์โหลดไม่ได้ (HTTP ' + res.status + ')';
+  } catch (err) {
+    return 'ดาวน์โหลดไม่ได้ (' + errorInfo(err).message + ')';
+  }
+}
+
+/* เก็บ warning ของ pdf.js (เฉพาะที่เกิดบน main thread) ไว้ใส่รายงาน */
+function captureWarnings() {
+  const original = console.log;
+  console.log = function (...args) {
+    const first = args[0];
+    if (typeof first === 'string' && first.startsWith('Warning:') && state.warnings.size < WARNING_LIMIT) {
+      state.warnings.add(first.slice(0, WARNING_MAX_CHARS));
+    }
+    original.apply(console, args);
+  };
+}
+
+/* ---------- 1. โหลด pdf.js + ดาวน์โหลด worker ตอนเปิดหน้า ---------- */
+
+async function loadLibrary() {
+  const t = now();
+  try {
+    await loadScript(LIB.url, LIB.integrity);
+    state.lib = { ok: true, ms: now() - t, readyAt: now(), ...resourceCacheState(LIB.url) };
+  } catch {
+    state.lib = { ok: false, ms: now() - t, error: await diagnoseScriptFailure(LIB.url) };
+  }
+}
+
+async function fetchWorkerBlob() {
+  const t = now();
+  try {
+    const res = await fetch(WORKER.url, { integrity: WORKER.integrity, mode: 'cors', credentials: 'omit' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const blob = new Blob([await res.arrayBuffer()], { type: 'text/javascript' });
+    state.workerBlobUrl = URL.createObjectURL(blob);
+    state.workerFetch = { ok: true, ms: now() - t, ...resourceCacheState(WORKER.url) };
+  } catch (err) {
+    state.workerFetch = {
+      ok: false,
+      ms: now() - t,
+      error: formatError(errorInfo(err)) + ' — ' + await diagnoseScriptFailure(WORKER.url)
+    };
+  }
+}
+
+function renderLibStatus() {
+  const box = $('lib-status');
+  const lines = [];
+  lines.push(state.lib.ok
+    ? 'pdf.js ' + PDFJS_VERSION + ' พร้อมใช้ (' + fmtMs(state.lib.ms) + ')'
+    : 'โหลด pdf.js ไม่สำเร็จ: ' + state.lib.error);
+  lines.push(state.workerFetch.ok
+    ? 'ดาวน์โหลด worker สำเร็จ (' + fmtMs(state.workerFetch.ms) + ')'
+    : 'ดาวน์โหลด worker ไม่สำเร็จ: ' + state.workerFetch.error);
+  box.textContent = lines.join(' · ');
+  box.className = state.lib.ok && state.workerFetch.ok ? 'ok' : 'bad';
+}
+
+/* ---------- 2. วิธีสร้าง worker ที่ทดสอบ ---------- */
+
+/* รอข้อความ "ready" จาก pdf.worker เพื่อยืนยันว่า Worker รันได้จริง */
+function startWorker(url) {
+  return new Promise((resolve, reject) => {
+    let worker;
+    try {
+      worker = new Worker(url);
+    } catch (err) {
+      reject(err);
+      return;
+    }
+    const cleanup = () => {
+      clearTimeout(timer);
+      worker.removeEventListener('message', onMessage);
+      worker.removeEventListener('error', onError);
+    };
+    const onMessage = (event) => {
+      if (event.data && event.data.action === 'ready') {
+        cleanup();
+        resolve(worker);
+      }
+    };
+    const onError = (event) => {
+      cleanup();
+      worker.terminate();
+      reject(new Error('Worker error: ' + (event.message || 'ไม่ทราบสาเหตุ')));
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      worker.terminate();
+      reject(new Error('Worker ไม่ตอบภายใน ' + STEP_TIMEOUT_MS + ' ms'));
+    }, STEP_TIMEOUT_MS);
+    worker.addEventListener('message', onMessage);
+    worker.addEventListener('error', onError);
+  });
+}
+
+async function createBlobWorker() {
+  if (!state.workerBlobUrl) throw new Error('ไม่มี worker (ดาวน์โหลดไม่สำเร็จ)');
+  const worker = await startWorker(state.workerBlobUrl);
+  return {
+    pdfWorker: new pdfjsLib.PDFWorker({ port: worker }),
+    actual: 'Web Worker',
+    dispose: () => worker.terminate()
+  };
+}
+
+async function createCdnWorker() {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER.url;
+  const pdfWorker = new pdfjsLib.PDFWorker();
+  await withTimeout(pdfWorker.promise, 'สร้าง worker');
+  return {
+    pdfWorker,
+    actual: pdfWorker._webWorker ? 'Web Worker' : 'main thread (pdf.js fallback เอง)',
+    dispose: () => {}
+  };
+}
+
+async function createMainThreadWorker() {
+  if (!globalThis.pdfjsWorker) {
+    if (state.workerBlobUrl) await loadScript(state.workerBlobUrl);
+    else await loadScript(WORKER.url, WORKER.integrity);
+  }
+  const pdfWorker = new pdfjsLib.PDFWorker();
+  await withTimeout(pdfWorker.promise, 'สร้าง main-thread worker');
+  return {
+    pdfWorker,
+    actual: pdfWorker._webWorker ? 'Web Worker (ไม่คาดคิด)' : 'main thread',
+    dispose: () => {}
+  };
+}
+
+/*
+ * ลำดับการรันสำคัญ: blob ใช้ port ของตัวเองจึงไม่แตะ state กลางของ pdf.js,
+ * cdn ใช้ state กลาง (ถ้า fallback จะปิด worker ถาวร) และ main ต้องรันท้ายสุดเสมอ
+ */
+const MODES = [
+  { key: 'blob', label: 'Worker จาก blob (fetch + ตรวจ integrity)', create: createBlobWorker },
+  { key: 'cdn', label: 'Worker จาก URL cdnjs (workerSrc ตาม brief)', create: createCdnWorker },
+  { key: 'main', label: 'Main thread (fallback)', create: createMainThreadWorker }
+];
+
+/* ---------- 3. parse ---------- */
+
+function toItems(rawItems, page) {
+  const items = [];
+  for (const it of rawItems) {
+    if (typeof it.str !== 'string') continue;
+    items.push({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width, h: it.height, page });
+  }
+  return items;
+}
+
+const countChars = (items) => items.reduce((sum, it) => sum + it.str.replace(/\s/g, '').length, 0);
+
+async function runMode(mode, bytes) {
+  const result = { key: mode.key, label: mode.label, actual: null, workerMs: null, openMs: null, pages: [], error: null };
+  const tStart = now();
+  let created = null;
+  let task = null;
+  try {
+    let t = now();
+    created = await withTimeout(mode.create(), 'สร้าง worker');
+    result.workerMs = now() - t;
+    result.actual = created.actual;
+
+    t = now();
+    task = pdfjsLib.getDocument({
+      data: bytes.slice(),
+      worker: created.pdfWorker,
+      isEvalSupported: false,
+      disableFontFace: true,
+      verbosity: pdfjsLib.VerbosityLevel.WARNINGS
+    });
+    const doc = await withTimeout(task.promise, 'เปิดไฟล์');
+    result.openMs = now() - t;
+
+    for (let p = 1; p <= doc.numPages; p++) {
+      t = now();
+      const page = await withTimeout(doc.getPage(p), 'อ่านหน้า ' + p);
+      const content = await withTimeout(page.getTextContent(), 'ดึงข้อความหน้า ' + p);
+      const parseMs = now() - t;
+      t = now();
+      const items = toItems(content.items, p);
+      const mapMs = now() - t;
+      const [x0, y0, x1, y1] = page.view;
+      result.pages.push({
+        page: p,
+        parseMs,
+        mapMs,
+        itemCount: items.length,
+        charCount: countChars(items),
+        rotate: page.rotate,
+        size: Math.round(x1 - x0) + 'x' + Math.round(y1 - y0) + ' pt',
+        items
+      });
+    }
+  } catch (err) {
+    result.error = errorInfo(err);
+  } finally {
+    if (task) await task.destroy();
+    if (created) {
+      created.pdfWorker.destroy();
+      created.dispose();
+    }
+  }
+  result.totalMs = now() - tStart;
+  return result;
+}
+
+/* ---------- 4. server ping + clipboard ---------- */
+
+function pingOnce() {
+  return new Promise((resolve, reject) => {
+    const t = now();
+    google.script.run
+      .withSuccessHandler(() => resolve(now() - t))
+      .withFailureHandler(reject)
+      .ping();
+  });
+}
+
+async function measurePing() {
+  if (typeof google === 'undefined' || !google.script || !google.script.run) {
+    return { error: 'ไม่ได้รันบน GAS (ไม่มี google.script.run)' };
+  }
+  const times = [];
+  try {
+    for (let i = 0; i < PING_COUNT; i++) times.push(await withTimeout(pingOnce(), 'server ping'));
+    return { times };
+  } catch (err) {
+    return { times, error: formatError(errorInfo(err)) };
+  }
+}
+
+/* ต้องเรียกทันทีในจังหวะที่ผู้ใช้กดปุ่ม (ก่อน await ใดๆ) */
+function probeClipboard() {
+  if (!navigator.clipboard || !navigator.clipboard.writeText) return Promise.resolve('ไม่รองรับ');
+  return navigator.clipboard.writeText(CLIPBOARD_PROBE_TEXT)
+    .then(() => 'ใช้ได้')
+    .catch((err) => 'ใช้ไม่ได้ (' + errorInfo(err).name + ')');
+}
+
+/* ---------- 5. รายงาน ---------- */
+
+function navigationTiming() {
+  const nav = performance.getEntriesByType('navigation')[0];
+  if (!nav) return 'ไม่มีข้อมูล navigation timing';
+  return 'responseEnd ' + fmtMs(nav.responseEnd) +
+    ' · DOMContentLoaded ' + fmtMs(nav.domContentLoadedEventEnd) +
+    ' · load ' + fmtMs(nav.loadEventEnd);
+}
+
+function summarizeMode(r) {
+  const lines = [];
+  lines.push('- ' + r.key + ': ' + r.label);
+  if (r.actual) lines.push('    ทำงานจริงแบบ: ' + r.actual);
+  if (r.error) lines.push('    ผิดพลาด: ' + formatError(r.error));
+  lines.push('    สร้าง worker ' + fmtMs(r.workerMs) + ' · เปิดไฟล์ ' + fmtMs(r.openMs) + ' · รวมทั้งโหมด ' + fmtMs(r.totalMs));
+  if (r.pages.length) {
+    const parseTimes = r.pages.map((p) => p.parseMs);
+    const parseSum = parseTimes.reduce((a, b) => a + b, 0);
+    const items = r.pages.reduce((a, p) => a + p.itemCount, 0);
+    const chars = r.pages.reduce((a, p) => a + p.charCount, 0);
+    lines.push('    parse ' + r.pages.length + ' หน้า รวม ' + fmtMs(parseSum) +
+      ' · เฉลี่ย/หน้า ' + fmtMs(parseSum / r.pages.length) +
+      ' · สูงสุด/หน้า ' + fmtMs(Math.max(...parseTimes)));
+    lines.push('    items ' + items + ' · ตัวอักษร (ไม่นับช่องว่าง) ' + chars +
+      (chars === 0 ? ' · ไม่มี text layer' : ''));
+    for (const p of r.pages) {
+      lines.push('      หน้า ' + p.page + ': parse ' + fmtMs(p.parseMs) + ' · แปลง item ' + fmtMs(p.mapMs) +
+        ' · items ' + p.itemCount + ' · ตัวอักษร ' + p.charCount + ' · rotate ' + p.rotate + ' · ' + p.size);
+    }
+  }
+  return lines.join('\n');
+}
+
+function buildReport(results, ping, clipboard) {
+  const f = state.file;
+  const lines = [];
+  lines.push('Doc Check — Phase 0 POC report v' + POC_VERSION);
+  lines.push('เวลา: ' + new Date().toISOString());
+  lines.push('เบราว์เซอร์: ' + navigator.userAgent);
+  lines.push('origin: ' + location.origin + ' · secure context: ' + (window.isSecureContext ? 'ใช่' : 'ไม่ใช่') +
+    ' · อยู่ใน iframe: ' + (window.top !== window.self ? 'ใช่' : 'ไม่ใช่'));
+  lines.push('');
+  lines.push('[โหลดหน้า] (นับจากเริ่มโหลด iframe ของหน้านี้)');
+  lines.push('  ' + navigationTiming() + ' · เริ่มอ่าน <head> ' + fmtMs(T_HEAD));
+  lines.push('');
+  lines.push('[pdf.js ' + PDFJS_VERSION + ' จาก cdnjs]');
+  lines.push(state.lib.ok
+    ? '  pdf.min.js: สำเร็จ (integrity ผ่าน) โหลด+รัน ' + fmtMs(state.lib.ms) + ' · network ' + fmtMs(state.lib.network) +
+      ' · จาก cache: ' + state.lib.cache + ' · พร้อมใช้ที่ ' + fmtMs(state.lib.readyAt)
+    : '  pdf.min.js: ไม่สำเร็จ — ' + state.lib.error);
+  lines.push(state.workerFetch.ok
+    ? '  pdf.worker.min.js (fetch + integrity): สำเร็จ ' + fmtMs(state.workerFetch.ms) + ' · network ' +
+      fmtMs(state.workerFetch.network) + ' · จาก cache: ' + state.workerFetch.cache
+    : '  pdf.worker.min.js (fetch + integrity): ไม่สำเร็จ — ' + state.workerFetch.error);
+  lines.push('');
+  lines.push('[ไฟล์] (ไม่ระบุชื่อไฟล์)');
+  lines.push('  ขนาด ' + fmtKb(f.size) + ' · อ่านไฟล์ ' + fmtMs(f.readMs) + ' · ขึ้นต้นด้วย %PDF-: ' + (f.hasHeader ? 'ใช่' : 'ไม่ใช่'));
+  lines.push('');
+  lines.push('[วิธีอ่าน PDF] (ลำดับที่รัน: ' + MODES.map((m) => m.key).join(' → ') + ')');
+  for (const r of results) lines.push(summarizeMode(r));
+  lines.push('');
+  lines.push('[server ping ผ่าน google.script.run]');
+  if (ping.times && ping.times.length) lines.push('  ' + ping.times.map(fmtMs).join(' · ') + ' (ครั้งแรกมักช้ากว่า)');
+  if (ping.error) lines.push('  ' + ping.error);
+  lines.push('');
+  lines.push('[clipboard] Clipboard API: ' + clipboard);
+  lines.push('');
+  lines.push('[warning จาก pdf.js บน main thread]');
+  lines.push(state.warnings.size ? [...state.warnings].map((w) => '  ' + w).join('\n') : '  ไม่มี');
+  lines.push('');
+  lines.push('[ยังไม่วัด] extract, compare — วัดใน Phase 2/3');
+  return lines.join('\n');
+}
+
+function renderPreview(results) {
+  const tbody = $('items');
+  tbody.replaceChildren();
+  const source = results.find((r) => r.pages.length);
+  if (!source) return;
+  for (const it of source.pages[0].items.slice(0, PREVIEW_ITEM_LIMIT)) {
+    const tr = document.createElement('tr');
+    for (const [value, cls] of [[it.page, 'num'], [it.x.toFixed(1), 'num'], [it.y.toFixed(1), 'num'],
+      [it.w.toFixed(1), 'num'], [it.h.toFixed(1), 'num'], [it.str, 'str']]) {
+      const td = document.createElement('td');
+      td.className = cls;
+      td.textContent = value;
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+}
+
+async function copyReport() {
+  const text = $('report').textContent;
+  const status = $('copy-status');
+  try {
+    await navigator.clipboard.writeText(text);
+    status.textContent = 'คัดลอกแล้ว (Clipboard API)';
+    return;
+  } catch {
+    // Clipboard API ถูกบล็อกใน iframe → ใช้ execCommand แทน
+  }
+  const area = document.createElement('textarea');
+  area.value = text;
+  area.setAttribute('readonly', '');
+  area.style.position = 'fixed';
+  area.style.opacity = '0';
+  document.body.appendChild(area);
+  area.select();
+  const ok = document.execCommand('copy');
+  area.remove();
+  status.textContent = ok
+    ? 'คัดลอกแล้ว (execCommand)'
+    : 'คัดลอกอัตโนมัติไม่ได้ — ลากคลุมข้อความในกรอบด้านล่างแล้วกด Ctrl+C';
+}
+
+/* ---------- 6. ผูกปุ่ม ---------- */
+
+async function onFileChange() {
+  const file = $('file').files[0];
+  state.file = null;
+  if (file) {
+    const t = now();
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const readMs = now() - t;
+    const head = new TextDecoder('latin1').decode(bytes.subarray(0, PDF_HEADER_SCAN_BYTES));
+    state.file = { bytes, size: file.size, readMs, hasHeader: head.includes('%PDF-') };
+  }
+  updateRunState();
+}
+
+function updateRunState() {
+  const ready = Boolean(state.file && state.lib && state.lib.ok);
+  $('run').disabled = !ready;
+  if (!state.file) setStatus('', 'idle');
+  else if (ready) setStatus('พร้อมทดสอบ (' + fmtKb(state.file.size) + ')', 'ready');
+  else if (!state.lib) setStatus('รอโหลด pdf.js …', 'waiting');
+  else setStatus('ทดสอบไม่ได้ — โหลด pdf.js ไม่สำเร็จ (ดูข้อ 1)', 'error');
+}
+
+async function onRun() {
+  const clipboardProbe = probeClipboard();
+  $('run').disabled = true;
+  $('file').disabled = true;
+  try {
+    const results = [];
+    for (const mode of MODES) {
+      setStatus('กำลังทดสอบ: ' + mode.label + ' …', 'running');
+      results.push(await runMode(mode, state.file.bytes));
+    }
+    setStatus('กำลังวัด server ping …', 'running');
+    const ping = await measurePing();
+    const clipboard = await clipboardProbe;
+    $('report').textContent = buildReport(results, ping, clipboard);
+    renderPreview(results);
+    $('result').hidden = false;
+    setStatus('เสร็จแล้ว — กด "คัดลอกรายงาน" แล้วส่งให้ Claude · ทดสอบไฟล์อื่นให้โหลดหน้าใหม่ (F5) ก่อน', 'done');
+  } catch (err) {
+    setStatus('หน้าทดสอบทำงานผิดพลาด — ถ่ายภาพหน้าจอนี้ส่งให้ Claude: ' + formatError(errorInfo(err)), 'error');
+  }
+}
+
+async function init() {
+  captureWarnings();
+  $('file').addEventListener('change', onFileChange);
+  $('run').addEventListener('click', onRun);
+  $('copy').addEventListener('click', copyReport);
+  await Promise.all([loadLibrary(), fetchWorkerBlob()]);
+  renderLibStatus();
+  updateRunState();
+}
+
+init();
+</script>
+</body>
+</html>
